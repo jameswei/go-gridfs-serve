@@ -48,7 +48,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
       count, err := s.DB(CONFIG.Database).C(CONFIG.Collection+".files").Find(
                 bson.M{"_id": bson.ObjectIdHex(etag_id), "md5": etag_md5}).Count()
       if count > 0 && err == nil {
-        w.Header().Set("Cache-Control", "public: max-age=2629000") // 1 Month
+        w.Header().Set("Cache-Control", "max-age=2629000: public") // 1 Month
         w.Header().Set("ETag", etag)
         w.WriteHeader(http.StatusNotModified)
         return
@@ -74,7 +74,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 
   etag = file.Id().(bson.ObjectId).Hex() + "_" + file.MD5()
   w.Header().Set("ETag", etag)
-  w.Header().Set("Cache-Control", "public: max-age=2629000") // 1 Month
+  w.Header().Set("Cache-Control", "max-age=2629000: public") // 1 Month
   w.Header().Set("Content-MD5", file.MD5())
 
   contentType := file.ContentType()
