@@ -5,6 +5,7 @@ import (
   "fmt"
   "io"
   "net/http"
+  "net/http/pprof"
   "os"
   "runtime"
   "strconv"
@@ -14,18 +15,18 @@ import (
   "launchpad.net/mgo/bson"
 )
 
-var cpucores = flag.String("cpucores", "", "specify how many cpu cores to use")
+var cpucores = flag.Int("cpucores", 1, "specify how many cpu cores to use")
 var collection = flag.String("collection", "fs", "name of the GridFS collection")
 var database = flag.String("database", "", "name of the GridFS database")
 var host = flag.String("host", "127.0.0.1", "host of the GridFS database")
 var port = flag.String("port", "27017", "port of the GridFS database")
 var listen = flag.String("listen", ":8080", "adress:port to listen to")
+var debug = flag.Bool("debug", false, "Turn on profiling via http")
+var ensureIndex = flag.Bool("index", false, "Turns on index creation at start")
 
 type Config struct {
   Collection string
   Database string
-  Host string
-  Port string
 }
 
 const BUFF_SIZE int = 1024 * 64 // 64Kbyte
@@ -107,14 +108,6 @@ func handler(w http.ResponseWriter, r *http.Request) {
 func main() {
   CONFIG = new (Config)
   flag.Parse()
-  if *cpucores != "" {
-    cores, err := strconv.Atoi(*cpucores)
-    if err != nil {
-      fmt.Println(err)
-      os.Exit(-1)
-    }
-    CPUCORES = cores
-  }
   if *collection != "" {
     CONFIG.Collection = *collection
   }
@@ -124,30 +117,48 @@ func main() {
     fmt.Println("Error: You need to specify a database name!")
     os.Exit(-1)
   }
-  if *host != "" {
-    CONFIG.Host = *host
-  }
-  if *port != "" {
-    CONFIG.Port = *port
-  }
 
   fmt.Println("go-grid-serve version:", "v0.1.0")
   fmt.Println("go version:", runtime.Version())
-  fmt.Printf("using %d CPU cores\n", CPUCORES)
-  runtime.GOMAXPROCS(CPUCORES)
+  fmt.Printf("using %d CPU cores\n", *cpucores)
+  runtime.GOMAXPROCS(*cpucores )
 
-  // TODO: Ensure indexes!
-  SESSION, _ = mgo.Dial(fmt.Sprintf("mongodb://%s:%s?connect=direct", CONFIG.Host, CONFIG.Port))
+  SESSION, _ = mgo.Dial(fmt.Sprintf("mongodb://%s:%s?connect=direct", *host, *port))
   SESSION.SetMode(mgo.Monotonic, true)
+  collection := SESSION.DB(CONFIG.Database).C(CONFIG.Collection+".files")
+
+
+  if *ensureIndex {
+    filenameIndex := mgo.Index{Key: []string{"filename", "-created"}, Unique: false, DropDups: false, Background: true, Sparse: false }
+    md5Index := mgo.Index{Key: []string{"_id", "md5"}, Unique: false, DropDups: false, Background: true, Sparse: false }
+    err := collection.EnsureIndex(filenameIndex)
+    if err != nil {
+      panic(err)
+      os.Exit(-1)
+    }
+    err = collection.EnsureIndex(md5Index)
+    if err != nil {
+      panic(err)
+      os.Exit(-1)
+    }
+  }
 
   mongoHandler := http.NewServeMux()
   mongoHandler.HandleFunc("/", handler)
+
+  if *debug {
+    mongoHandler.HandleFunc("/debug/pprof/", pprof.Index)
+    mongoHandler.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+    mongoHandler.HandleFunc("/debug/pprof/profile", pprof.Profile)
+    mongoHandler.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+  }
+
   server := &http.Server{
     Addr:           *listen,
     Handler:        mongoHandler,
-    ReadTimeout:    30 * time.Second,
-    WriteTimeout:   1 * time.Second,
-    MaxHeaderBytes: 8096,
+    ReadTimeout:    60 * time.Second,
+    WriteTimeout:   10 * time.Second,
+    MaxHeaderBytes: 32 * 1024,
   }
   fmt.Println(server.ListenAndServe())
 
