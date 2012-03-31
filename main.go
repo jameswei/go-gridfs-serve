@@ -81,8 +81,6 @@ func handler(w http.ResponseWriter, r *http.Request) {
   contentType := file.ContentType()
   if contentType != "" {
     w.Header().Set("Content-Type", contentType)
-  } else {
-    w.Header().Set("Content-Type","application/octet-stream")
   }
 
   w.Header().Set("Content-Length", strconv.FormatInt(file.Size(), 10))
