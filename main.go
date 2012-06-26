@@ -11,8 +11,8 @@ import (
   "strconv"
   "strings"
   "time"
-  "launchpad.net/mgo"
-  "launchpad.net/mgo/bson"
+  "labix.org/v2/mgo"
+  "labix.org/v2/mgo/bson"
 )
 
 var cpucores = flag.Int("cpucores", 1, "specify how many cpu cores to use")
