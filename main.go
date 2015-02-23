@@ -158,6 +158,5 @@ func main() {
 		MaxHeaderBytes: 32 * 1024,
 	}
 	fmt.Println(server.ListenAndServe())
-
 	defer SESSION.Close()
 }
